@@ -133,7 +133,7 @@ static void system_handle_nominal_state(void)
 
     if(sd_card_enabled() == BOOL_TRUE)
     {
-        if(xSemaphoreTake(semaphore_sd_card, pdMS_TO_TICKS(500) == pdTRUE))
+        if(xSemaphoreTake(semaphore_sd_card, pdMS_TO_TICKS(500)) == pdTRUE)
         {
             uint8_t buffer[sizeof(system_t)] = {0};
             system_serialize_datas(&system_datas, buffer);
