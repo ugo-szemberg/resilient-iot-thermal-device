@@ -14,8 +14,8 @@ typedef struct {
 } telemetry_t;
 
 typedef struct {
-    telemetry_t telemetry;
     anomaly_t anomaly;
+    telemetry_t telemetry;
 } system_t;
 
 #endif

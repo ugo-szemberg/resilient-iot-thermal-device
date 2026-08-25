@@ -66,8 +66,7 @@ void sd_card_init(void)
 
 void sd_card_write(void* datas, size_t bytes)
 {
-    FILE* file;
-    file = fopen("/sdcard/logs.bin", "ab");
+    FILE* file = fopen("/sdcard/logs.bin", "ab");
     if(file == NULL)
     {
         ESP_LOGE(TAG_SD_CARD, "FAILED TO OPEN FILE");
@@ -86,6 +85,27 @@ void sd_card_write(void* datas, size_t bytes)
     fclose(file);
 }
 
+void sd_card_read(void* buffer, size_t bytes)
+{
+    FILE* file = fopen("/sdcard/logs.bin", "rb");
+    if(file == NULL)
+    {
+        ESP_LOGE(TAG_SD_CARD, "FAILED TO OPEN FILE");
+        return;
+    }
+
+    if(fread(buffer, bytes, 1, file) == 1)
+    {
+        ESP_LOGI(TAG_SD_CARD, "SUCCEEDED TO READ DATAS");
+    }
+    else
+    {
+        ESP_LOGE(TAG_SD_CARD, "FAILED TO READ DATAS");
+    }
+    
+    fclose(file);
+}
+
 bool_t sd_card_has_anomaly()
 {
     return sd_card_anomaly;
@@ -94,6 +114,15 @@ bool_t sd_card_has_anomaly()
 bool_t sd_card_enabled(void)
 {
     return sd_card_initialized;
+}
+
+void sd_card_clean(void)
+{
+    FILE* file = fopen("/sdcard/logs.bin", "w");
+    if(file != NULL)
+    {
+        fclose(file);
+    }
 }
 
 void sd_card_close(void)

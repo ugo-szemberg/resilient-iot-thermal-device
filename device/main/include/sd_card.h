@@ -9,8 +9,10 @@
 
 void sd_card_init(void);
 void sd_card_write(void* datas, size_t bytes);
+void sd_card_read(void* buffer, size_t bytes);
 bool_t sd_card_has_anomaly(void);
 bool_t sd_card_enabled(void);
+void sd_card_clean(void);
 void sd_card_close(void);
 
 #endif

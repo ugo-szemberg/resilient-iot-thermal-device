@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 #define PORT 3333
-#define SYSTEM_DATAS_SIZE 10
 
 typedef uint8_t bool_t;
 #define BOOL_TRUE ((bool_t)1U)
@@ -20,11 +19,11 @@ typedef struct {
 } telemetry_t;
 
 typedef struct {
-	telemetry_t telemetry;
 	anomaly_t anomaly;
+	telemetry_t telemetry;
 } system_t;
 
-static void deserialize_system_datas(uint8_t buffer_datas[SYSTEM_DATAS_SIZE], system_t* system_datas);
+static void deserialize_system_datas(uint8_t* buffer_datas, system_t* system_datas);
 static void print_bool_data(char* str, bool_t data);
 static void print_datas(system_t* datas);
 
@@ -58,9 +57,9 @@ int main(void)
 	{
 		int size = (int)sizeof(addr);
 		system_t system_datas;
-		uint8_t buffer_datas[SYSTEM_DATAS_SIZE];
+		uint8_t buffer_datas[sizeof(system_t)] = {0};
 
-		int bytes = recvfrom(sock, (char*)buffer_datas, sizeof(buffer_datas), 0, (struct sockaddr*)&addr, &size);
+		int bytes = recvfrom(sock, (char*)buffer_datas, sizeof(system_t), 0, (struct sockaddr*)&addr, &size);
 		if (bytes == sizeof(system_t))
 		{
 			deserialize_system_datas(buffer_datas, &system_datas);
@@ -78,7 +77,7 @@ int main(void)
 	return 0;
 }
 
-static void deserialize_system_datas(uint8_t buffer_datas[SYSTEM_DATAS_SIZE], system_t* system_datas)
+static void deserialize_system_datas(uint8_t* buffer_datas, system_t* system_datas)
 {
 	system_datas->anomaly.temperature = buffer_datas[0];
 	system_datas->anomaly.wifi = buffer_datas[1];

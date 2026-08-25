@@ -20,7 +20,7 @@
 
 typedef enum {
     INITIAL,
-    AQUISITION,
+    ACQUISITION,
     TRANSMISSION,
     NOMINAL,
     CRITICAL,
@@ -87,6 +87,7 @@ void system_serialize_datas(system_t* datas, uint8_t* buffer)
 
     buffer[3] = (uint8_t)(datas->telemetry.temperature >> 8);
     buffer[4] = (uint8_t)(datas->telemetry.temperature & 0xFF);
+    buffer[5] = (uint8_t)0U; //padding
 }
 
 static void system_handle_initial_state(void)
@@ -97,7 +98,7 @@ static void system_handle_initial_state(void)
 
 static void system_handle_acquisition_state(void)
 {
-    ESP_LOGI(TAG_SYSTEM, "AQUISITION");
+    ESP_LOGI(TAG_SYSTEM, "ACQUISITION");
 
     system_datas.telemetry.temperature = temperature_sensor_get_temperature();
     
@@ -120,10 +121,16 @@ static void system_handle_transmission_state(void)
     {
         if(lost_packet_count > 0 && sd_card_enabled() == BOOL_TRUE)
         {
-            //function that recover datas from sd
-            //function that send datas in wifi
-            //function that clean sd
-            lost_packet_count = 0;
+            uint8_t buffer[sizeof(system_t) * lost_packet_count] = {0};
+            sd_card_read(&buffer, sizeof(buffer));
+
+            for(uint32_t i = 0U; i < lost_packet_count; ++i)
+            {
+                wifi_send_datas((void*)&buffer[i * sizeof(system_t)], (int)sizeof(system_t));
+            }
+
+            sd_card_clean();
+            lost_packet_count = 0U;
         }
 
         uint8_t buffer[sizeof(system_t)] = {0};
@@ -133,7 +140,7 @@ static void system_handle_transmission_state(void)
     else
     {
         system_datas.anomaly.wifi = BOOL_TRUE;
-        lost_packet_count += 1;
+        lost_packet_count += 1U;
 
         if(sd_card_enabled() == BOOL_TRUE)
         {
@@ -166,7 +173,7 @@ static void system_handle_nominal_state(void)
 static void system_handle_critical_state(void)
 {
     ESP_LOGI(TAG_SYSTEM, "CRITICAL");
-    system_state = AQUISITION;
+    system_state = ACQUISITION;
 }
 
 static void system_handle_sleeping_state(void)
@@ -194,9 +201,9 @@ void system_update_state(void* arg)
         {
         case INITIAL:
             system_handle_initial_state();
-            system_state = AQUISITION;
+            system_state = ACQUISITION;
             break;
-        case AQUISITION:
+        case ACQUISITION:
             system_handle_acquisition_state();
             system_state = TRANSMISSION;
             break;

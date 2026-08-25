@@ -12,6 +12,7 @@
 #include <stdio.h>
 
 #define SSID "THERMAL_DEVICE"
+#define PASSWORD "RESILIENT"
 #define UDP_SERVER_IP "192.168.4.255"
 #define UDP_SERVER_PORT 3333
 #define WIFI_CONNECTED_BIT BIT0
@@ -80,8 +81,9 @@ void wifi_init(void)
         .ap = {
             .ssid = SSID,
             .ssid_len = strlen(SSID),
+            .password = PASSWORD,
             .channel = 1,
-            .authmode = WIFI_AUTH_OPEN,
+            .authmode = WIFI_AUTH_WPA2_PSK,
             .max_connection = 3,
         },
     };
