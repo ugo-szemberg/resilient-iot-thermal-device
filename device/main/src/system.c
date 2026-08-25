@@ -1,5 +1,5 @@
 #include "../include/system.h"
-#include "../include/devices.h"
+#include "../include/temperature_sensor.h"
 #include "../include/system_types.h"
 #include "../include/wifi.h"
 #include "../include/sd_card.h"
@@ -31,7 +31,7 @@ static state_t system_state = INITIAL;
 static uint32_t time_to_sleep_uS = TIME_SLEEP_S_NOMINAL * uS_TO_S_FACTOR;
 static SemaphoreHandle_t semaphore_wifi;
 static SemaphoreHandle_t semaphore_sd_card;
-static bool_t anomaly_detected = BOOL_FALSE;
+static RTC_DATA_ATTR uint32_t lost_packet_count = 0U;
 
 static system_t system_datas =
 {
@@ -92,32 +92,61 @@ void system_serialize_datas(system_t* datas, uint8_t* buffer)
 static void system_handle_initial_state(void)
 {
     ESP_LOGI(TAG_SYSTEM, "INITIAL");
-    devices_init();
+    temperature_sensor_init();
 }
 
 static void system_handle_acquisition_state(void)
 {
     ESP_LOGI(TAG_SYSTEM, "AQUISITION");
 
-    devices_get_datas(&system_datas.telemetry);
-    anomaly_detected = devices_get_anomalies(&system_datas);
+    system_datas.telemetry.temperature = temperature_sensor_get_temperature();
+    
+    if(temperature_sensor_has_anomaly(system_datas.telemetry.temperature) == BOOL_TRUE)
+    {
+        system_datas.anomaly.temperature = BOOL_TRUE;
+        ESP_LOGI(TAG_TEMPERATURE_SENSOR, "ANOMALY");
+    }
+
+    if(sd_card_has_anomaly() == BOOL_TRUE)
+    {
+        system_datas.anomaly.sd = BOOL_TRUE;
+        ESP_LOGI(TAG_SD_CARD, "ANOMALY");
+    }
 }
 
 static void system_handle_transmission_state(void)
 {
     if(xSemaphoreTake(semaphore_wifi, pdMS_TO_TICKS(500)) == pdTRUE)
     {
+        if(lost_packet_count > 0 && sd_card_enabled() == BOOL_TRUE)
+        {
+            //function that recover datas from sd
+            //function that send datas in wifi
+            //function that clean sd
+            lost_packet_count = 0;
+        }
+
         uint8_t buffer[sizeof(system_t)] = {0};
         system_serialize_datas(&system_datas, buffer);
         wifi_send_datas((void*)&buffer, (int)sizeof(buffer));
     }
     else
     {
-        system_datas.anomaly.wifi = BOOL_TRUE; 
-        anomaly_detected = BOOL_TRUE;
+        system_datas.anomaly.wifi = BOOL_TRUE;
+        lost_packet_count += 1;
+
+        if(sd_card_enabled() == BOOL_TRUE)
+        {
+            if(xSemaphoreTake(semaphore_sd_card, pdMS_TO_TICKS(500)) == pdTRUE)
+            {
+                uint8_t buffer[sizeof(system_t)] = {0};
+                system_serialize_datas(&system_datas, buffer);
+                sd_card_write((void*)&buffer, sizeof(buffer));
+            }
+        }
     }
 
-    if(anomaly_detected == BOOL_TRUE)
+    if(system_datas.anomaly.temperature == BOOL_TRUE)
     {
         system_state = CRITICAL;
     }
@@ -130,16 +159,6 @@ static void system_handle_transmission_state(void)
 static void system_handle_nominal_state(void)
 {
     ESP_LOGI(TAG_SYSTEM, "NOMINAL");
-
-    if(sd_card_enabled() == BOOL_TRUE)
-    {
-        if(xSemaphoreTake(semaphore_sd_card, pdMS_TO_TICKS(500)) == pdTRUE)
-        {
-            uint8_t buffer[sizeof(system_t)] = {0};
-            system_serialize_datas(&system_datas, buffer);
-            sd_card_write((void*)&buffer, sizeof(buffer));
-        }
-    }
 
     time_to_sleep_uS = TIME_SLEEP_S_NOMINAL * uS_TO_S_FACTOR;
 }
