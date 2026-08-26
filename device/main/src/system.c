@@ -157,7 +157,6 @@ static void system_handle_transmission_state(void)
     else
     {
         system_datas.anomaly.wifi = BOOL_TRUE;
-        lost_packet_count += 1U;
 
         if(sd_card_enabled() == BOOL_TRUE)
         {
@@ -166,6 +165,7 @@ static void system_handle_transmission_state(void)
                 uint8_t buffer[sizeof(system_t)] = {0};
                 system_serialize_datas(&system_datas, buffer);
                 sd_card_write((void*)&buffer, sizeof(buffer));
+                lost_packet_count += 1U;
             }
         }
     }
