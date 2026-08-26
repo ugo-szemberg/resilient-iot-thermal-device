@@ -2,10 +2,10 @@
 #include "esp_adc/adc_oneshot.h"
 
 #define TEMPERATURE_SENSOR_MAX (int16_t)50
-#define VOLTAGE (uint16_t)3300
-#define ADC_RESOLUTION (uint16_t)4095
-#define OFFSET (uint16_t)500
-#define CONVERSION (uint16_t)10
+#define VOLTAGE (int16_t)3300
+#define ADC_RESOLUTION (int16_t)4095
+#define OFFSET (int16_t)500
+#define CONVERSION (int16_t)10
 #define ADC_UNIT ADC_UNIT_1
 #define CHANNEL ADC_CHANNEL_0
 
@@ -30,8 +30,8 @@ int16_t temperature_sensor_get_temperature(void)
 {
     int adc_value;
     adc_oneshot_read(adc_handle, CHANNEL, &adc_value);
-    uint16_t mV = ((uint16_t)adc_value * VOLTAGE) / ADC_RESOLUTION;
-    int16_t temperature_value = (int16_t)((mV - OFFSET) / CONVERSION);
+    int32_t mV = ((int32_t)adc_value * VOLTAGE) / ADC_RESOLUTION;
+    int16_t temperature_value = (mV - OFFSET) / CONVERSION;
     return temperature_value;
 }
 
