@@ -6,6 +6,7 @@
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -17,6 +18,8 @@
 #define uS_TO_S_FACTOR (uint32_t)1000000ULL
 #define TIME_SLEEP_S_NOMINAL (uint32_t)10U
 #define TAG_SYSTEM (const char*)("SYSTEM")
+#define EVENT_WIFI_INIT BIT0
+#define EVENT_SD_INIT BIT1
 
 typedef enum {
     INITIAL,
@@ -29,9 +32,8 @@ typedef enum {
 
 static state_t system_state = INITIAL;
 static uint32_t time_to_sleep_uS = TIME_SLEEP_S_NOMINAL * uS_TO_S_FACTOR;
-static SemaphoreHandle_t semaphore_wifi;
-static SemaphoreHandle_t semaphore_sd_card;
 static RTC_DATA_ATTR uint32_t lost_packet_count = 0U;
+static EventGroupHandle_t system_events;
 
 static system_t system_datas =
 {
@@ -47,6 +49,19 @@ static system_t system_datas =
     }
 };
 
+void system_init_events(void)
+{
+    system_events = xEventGroupCreate();
+}
+
+void system_init_datas(system_t* datas)
+{
+    datas->telemetry.temperature = 0;
+    datas->anomaly.temperature = BOOL_FALSE;
+    datas->anomaly.wifi = BOOL_FALSE;
+    datas->anomaly.sd = BOOL_FALSE;
+}
+
 void system_init_watchdog(void)
 {
     esp_task_wdt_config_t twdt_config = {
@@ -59,23 +74,21 @@ void system_init_watchdog(void)
 
 void system_start_wifi(void* arg)
 {
-    semaphore_wifi = xSemaphoreCreateBinary();
     if(wifi_enabled() == BOOL_FALSE)
     {
         wifi_init();
-        xSemaphoreGive(semaphore_wifi);
     }
+    xEventGroupSetBits(system_events, EVENT_WIFI_INIT);
     vTaskDelete(NULL);
 }
 
 void system_init_sd_card(void* arg)
 {
-    semaphore_sd_card = xSemaphoreCreateBinary();
     if(sd_card_enabled() == BOOL_FALSE)
     {
         sd_card_init();
-        xSemaphoreGive(semaphore_sd_card);
     }
+    xEventGroupSetBits(system_events, EVENT_SD_INIT);
     vTaskDelete(NULL);
 }
 
@@ -100,6 +113,8 @@ static void system_handle_acquisition_state(void)
 {
     ESP_LOGI(TAG_SYSTEM, "ACQUISITION");
 
+    system_init_datas(&system_datas);
+
     system_datas.telemetry.temperature = temperature_sensor_get_temperature();
     
     if(temperature_sensor_has_anomaly(system_datas.telemetry.temperature) == BOOL_TRUE)
@@ -117,12 +132,14 @@ static void system_handle_acquisition_state(void)
 
 static void system_handle_transmission_state(void)
 {
-    if(xSemaphoreTake(semaphore_wifi, pdMS_TO_TICKS(500)) == pdTRUE)
+    EventBits_t bits = xEventGroupWaitBits(system_events, EVENT_WIFI_INIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(500));
+    
+    if(bits & EVENT_WIFI_INIT)
     {
         if(lost_packet_count > 0 && sd_card_enabled() == BOOL_TRUE)
         {
             uint8_t buffer[sizeof(system_t) * lost_packet_count] = {0};
-            sd_card_read(&buffer, sizeof(buffer));
+            sd_card_read(buffer, sizeof(buffer));
 
             for(uint32_t i = 0U; i < lost_packet_count; ++i)
             {
@@ -144,7 +161,7 @@ static void system_handle_transmission_state(void)
 
         if(sd_card_enabled() == BOOL_TRUE)
         {
-            if(xSemaphoreTake(semaphore_sd_card, pdMS_TO_TICKS(500)) == pdTRUE)
+            if(bits & EVENT_SD_INIT)
             {
                 uint8_t buffer[sizeof(system_t)] = {0};
                 system_serialize_datas(&system_datas, buffer);
